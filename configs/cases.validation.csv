@@ -1,0 +1,5 @@
+case_id,storm_id,init_time,forecast_hours,output_interval_hours,name,basin
+ragasa_00_30h,ragasa_2025,2025-09-22T00:00:00Z,30,6,Ragasa,WP
+ragasa_00_5h,ragasa_2025,2025-09-22T00:00:00Z,5,1,Ragasa,WP
+ragasa_00_30h_repeat,ragasa_2025,2025-09-22T00:00:00Z,30,6,Ragasa,WP
+ragasa_06_6h,ragasa_2025,2025-09-22T06:00:00Z,6,6,Ragasa,WP

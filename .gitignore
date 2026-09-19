@@ -2,3 +2,10 @@
 *.nc
 *.onnx
 *.xlsx
+__pycache__/
+.pytest_cache/
+/data/era5/
+/outputs/
+*.partial
+*.download
+*.log

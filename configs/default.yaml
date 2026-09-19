@@ -1,0 +1,16 @@
+# All relative paths are resolved against this file, not the working directory.
+experiment: default
+model_dir: ../models
+data_dir: ../data/era5
+output_dir: ../outputs
+device: cuda
+device_id: 0
+threads: 1
+max_sessions: 1  # 24 GB GPU: release the previous model before switching
+output_interval_hours: 6
+download_missing: true
+
+# Optional existing ERA5 NetCDF files; a single file may contain multiple times.
+# Both must be set together. Missing configured files are downloaded automatically.
+# surface_file: /data/era5/{init:%Y%m%d}/surface.nc
+# upper_file: /data/era5/{init:%Y%m%d}/upper.nc

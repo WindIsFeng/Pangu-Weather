@@ -1,0 +1,11 @@
+# Small real-data end-to-end validation; this is not a fixed forecast horizon.
+experiment: validation
+model_dir: ../models
+data_dir: ../data/era5
+output_dir: ../outputs
+device: cuda
+device_id: 0
+threads: 1
+max_sessions: 1  # 24 GB GPU: release the previous model before switching
+output_interval_hours: 6
+download_missing: true
