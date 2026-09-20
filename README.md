@@ -1,28 +1,29 @@
-# Pangu-Weather 台风事件批量预报
+**English** | [简体中文](README.zh-CN.md)
 
-填写一份 case 清单，指定每个台风案例的起报时间和预报时长，运行一条命令，得到每个 case 的全球预测结果。
-程序自动补齐缺失的 ERA5，直接读取 NetCDF，按原文贪婪算法推理并输出 NetCDF。没有 NPY 中间文件。
+# Pangu-Weather Batch Forecasting for Typhoon Events
 
-## 快速开始
+Create a case list that specifies the initialization time and forecast duration for each typhoon case, then run a single command to generate global forecasts for every case.
+The program automatically retrieves missing ERA5 data, reads NetCDF files directly, runs inference with the greedy algorithm described in the paper, and writes NetCDF output. No intermediate NPY files are created.
 
-在仓库根目录运行，依赖全部放在系统 conda 环境，不需要安装项目包：
+## Quick start
+
+Run the following commands from the repository root. All dependencies are installed in a system Conda environment; the project itself does not need to be installed as a package:
 
 ```bash
 conda env create -f environment.yml
 conda run -n pangu python -m pangu_weather doctor --config configs/default.yaml --load-model 6
 ```
 
-如果系统 `pangu` 环境已经创建，直接使用，无须重复安装。环境位置应为系统 conda 的 `envs/pangu`，
-不要使用项目内的 `--prefix`、`.venv` 或 `pip --target`。当前 GPU 依赖使用 CUDA 12、cuDNN 9。
-四个官方权重放在 `models/pangu_weather_{1,3,6,24}.onnx`，代码会按任务需要加载。
+If the system `pangu` environment already exists, use it directly instead of reinstalling it. The environment should be located under the system Conda installation at `envs/pangu`.
+Do not use a project-local `--prefix`, `.venv`, or `pip --target`. The current GPU dependencies use CUDA 12 and cuDNN 9.
+Place the four official model files at `models/pangu_weather_{1,3,6,24}.onnx`; the program loads them as required by each task.
 
-自动下载使用用户目录的 `.cdsapirc`，不把令牌写入仓库。需要先在 CDS 接受 ERA5
-地面和气压层数据集的使用条款，参见 [CDS API 设置](https://cds.climate.copernicus.eu/how-to-api)。
-只下载起报时刻的数据，不下载预报时段的未来 ERA5。
+Automatic downloads use `.cdsapirc` in the user's home directory, so credentials are never written to the repository. Before downloading data, accept the terms for the ERA5 surface and pressure-level datasets in CDS; see [CDS API setup](https://cds.climate.copernicus.eu/how-to-api).
+Only data at the initialization time is downloaded, not future ERA5 data covering the forecast period.
 
-## 设置 case
+## Define cases
 
-参考 `configs/cases.example.csv`，复制为自己的清单：
+Use `configs/cases.example.csv` as a template and copy it to your own case list:
 
 ```csv
 case_id,storm_id,init_time,forecast_hours,output_interval_hours,name,basin
@@ -31,41 +32,41 @@ ragasa_02,ragasa_2025,2025-09-22T00:00:00Z,120,6,Ragasa,WP
 ragasa_03,ragasa_2025,2025-09-22T00:00:00Z,56,3,Ragasa,WP
 ```
 
-- `case_id`：实验内唯一，使用英文字母、数字、下划线、点或连字符。
-- `storm_id`：台风稳定标识。可以用最佳路径数据中的 ID，避免仅使用跨年重名的台风名称。
-- `init_time`：带时区的整点时间，推荐写 UTC 的 `...T00:00:00Z`。
-- `forecast_hours`：正整数小时，必填，不固定预报天数。
-- `output_interval_hours`：正整数小时，列省略或留空时采用配置值，默认为 6。
-- `name`、`basin`：可选信息，不影响全球预报计算。
+- `case_id`: Unique within an experiment. Use letters, digits, underscores, periods, or hyphens.
+- `storm_id`: A stable typhoon identifier. Prefer an ID from best-track data instead of a storm name that may be reused in another year.
+- `init_time`: An hour-aligned timestamp with a time zone. UTC in the form `...T00:00:00Z` is recommended.
+- `forecast_hours`: Required positive integer number of hours. The forecast duration is not fixed.
+- `output_interval_hours`: Positive integer number of hours. If the column is omitted or empty, the configured value is used; the default is 6.
+- `name`, `basin`: Optional metadata that does not affect the global forecast calculation.
 
-时长不能整除输出间隔时，额外输出终点。例如 56 小时、间隔 6 小时，输出 6、12、…、54、56 小时。
-一个 case 也使用同一 CSV 和运行命令。
+If the forecast duration is not divisible by the output interval, the final time is emitted as an additional output. For example, a 56-hour forecast with a 6-hour interval produces output at 6, 12, ..., 54, and 56 hours.
+A single case uses the same CSV format and run command.
 
-## 运行
+## Run forecasts
 
-先查看时间范围、数据位置和模型调用，不下载、不加载模型、不写结果：
+First inspect the time range, data locations, and model invocations without downloading data, loading models, or writing results:
 
 ```bash
 conda run -n pangu python -m pangu_weather run --config configs/default.yaml --cases configs/cases.example.csv --dry-run
 ```
 
-确认清单后运行：
+After reviewing the case list, run:
 
 ```bash
 conda run --no-capture-output -n pangu python -m pangu_weather run --config configs/default.yaml --cases configs/cases.example.csv
 ```
 
-`configs/default.yaml` 中的 `experiment` 决定实验名称。相对路径全部相对于配置文件所在目录。
-默认在 GPU 0 顺序执行，避免并行进程争抢显存。24 GB GPU 默认仅缓存一个模型会话，切换模型时释放上一会话；更大显存可调整 `max_sessions`。CUDA 加载失败不会悄悄转为 CPU。
-需要 CPU 时明确设置 `device: cpu`。
+The `experiment` field in `configs/default.yaml` determines the experiment name. All relative paths are resolved against the directory containing the configuration file.
+By default, tasks run sequentially on GPU 0 to avoid competing for GPU memory. On a 24 GB GPU, only one model session is cached by default, and the previous session is released when switching models; increase `max_sessions` on GPUs with more memory. A CUDA loading failure never silently falls back to CPU.
+To use the CPU, explicitly set `device: cpu`.
 
-失败或中断后使用相同命令追加 `--resume`。完整且匹配的结果复用，未完成的预报从起报场重跑。
-更改 case 清单、配置、代码、输入或模型时应使用新的实验名称；程序不默认覆盖旧结果。
-退出码 0 表示全部完成或复用，1 表示存在失败或配置错误，130 表示用户中断。
+After a failure or interruption, rerun the same command with `--resume`. Complete, matching results are reused; incomplete forecasts restart from the initial field.
+Use a new experiment name after changing the case list, configuration, code, inputs, or model files. Existing results are not overwritten by default.
+Exit code 0 means all tasks completed or were reused, 1 means at least one task failed or the configuration was invalid, and 130 means the user interrupted the run.
 
-## 使用已有 ERA5 NetCDF
+## Use existing ERA5 NetCDF files
 
-在配置中同时指定地面和高空文件，可包含多个时间：
+Specify both surface and upper-air files in the configuration. Each file may contain multiple times:
 
 ```yaml
 surface_file: /data/era5/surface.nc
@@ -73,12 +74,12 @@ upper_file: /data/era5/upper.nc
 download_missing: false
 ```
 
-也可以使用模板，例如 `/data/era5/{init:%Y%m%dT%H}/surface.nc`。
-若启用 `download_missing: true`，不存在的目标文件会自动下载；已有文件缺少所需时刻则报错，
-不会覆盖已有多时间文件。程序会按实际坐标选时、排序和转置，并检查网格、气压层、单位及缺失值。
-详细约定见 [设计说明](docs/design.md)。
+Templates such as `/data/era5/{init:%Y%m%dT%H}/surface.nc` are also supported.
+With `download_missing: true`, missing target files are downloaded automatically. If an existing file does not contain the requested time, the program reports an error rather than overwriting a multi-time file.
+Coordinates are selected, sorted, and transposed from their actual values, and the grid, pressure levels, units, and missing values are validated.
+See the [design notes](docs/design.md) for detailed conventions.
 
-## 读取结果
+## Read the results
 
 ```text
 outputs/<experiment>/
@@ -97,9 +98,9 @@ outputs/<experiment>/
     manifest.json
 ```
 
-`summary.csv` 每行对应一个 case，记录 `complete`、`reused`、`failed` 等状态及错误原因。
-个别任务失败不阻止其他任务。相同起报数据只下载一次，完全相同的全球预报只计算一次。
-不同起报时间、预报时长和输出间隔分别记录结果。
+Each row in `summary.csv` represents one case and records statuses such as `complete`, `reused`, or `failed`, together with any error message.
+One failed task does not stop the others. Identical initialization data is downloaded only once, and identical global forecasts are computed only once.
+Results for different initialization times, forecast durations, and output intervals are tracked separately.
 
 ```python
 import xarray as xr
@@ -107,33 +108,33 @@ import xarray as xr
 surface = xr.open_dataset("outputs/default/cases/ragasa_01/surface.nc", decode_timedelta=False)
 upper = xr.open_dataset("outputs/default/cases/ragasa_01/upper.nc", decode_timedelta=False)
 mslp_hpa = surface.msl / 100
-z500 = upper.z.sel(level=500)  # z 是位势，单位 m²/s²
+z500 = upper.z.sel(level=500)  # z is geopotential in m²/s²
 ```
 
-输出包含 `forecast_reference_time`、`lead_time`、`valid_time`、经纬度和真实气压层。
-`lead_time` 单位为小时，初始场不混入预报结果。NetCDF 使用无损压缩并逐时写入。
+Output includes `forecast_reference_time`, `lead_time`, `valid_time`, latitude, longitude, and physical pressure levels.
+`lead_time` is measured in hours, and the initial field is not mixed into the forecast output. NetCDF files use lossless compression and are written one time step at a time.
 
-**case 中的 NetCDF 是相对符号链接，迁移或交付时应保留整个实验目录，包括 `_forecasts/`。**
-若只导出某个 case，可使用支持跟随链接的复制方式，同时保留其 `case.json` 和来源说明。
+**The NetCDF files under each case are relative symbolic links. When moving or delivering results, preserve the entire experiment directory, including `_forecasts/`.**
+To export only one case, use a copy method that follows symbolic links, and retain its `case.json` and provenance information.
 
-## 验证与旧代码
+## Validation and legacy code
 
 ```bash
 conda run -n pangu python -m pytest -q
 ```
 
-GPU 数值对照测试不自动下载，需要先准备默认验证时刻的 ERA5，再显式运行：
+The GPU numerical comparison test does not download data automatically. Prepare ERA5 data for the default validation time, then run it explicitly:
 
 ```bash
 PANGU_RUN_INTEGRATION=1 conda run --no-capture-output -n pangu python -m pytest tests/test_gpu_integration.py -q
 ```
 
-本次真实 ERA5 批次及 GPU 对照已完成，详见 [验证记录](docs/validation.md)。
+The real ERA5 batch and GPU comparison for this version have been completed; see the [validation record](docs/validation.md).
 
-通过 `PANGU_TEST_CONFIG` 和 `PANGU_TEST_INIT` 可指定其他配置与起报时刻。
-测试独立复现官方 24/6 小时迭代流程，逐输出比较新调度结果，并检查 3/1 小时模型执行。
+Use `PANGU_TEST_CONFIG` and `PANGU_TEST_INIT` to select another configuration and initialization time.
+The test independently reproduces the official 24/6-hour iteration procedure, compares every output with the new scheduler results, and verifies execution of the 3/1-hour models.
 
-旧脚本原样保存在 `legacy/`，不再作为入口。当前项目输出全球气象预报场；
-台风中心追踪、最佳路径匹配与路径/强度误差计算是后续评估阶段的工作。
+The original scripts are preserved unchanged in `legacy/` and are no longer entry points. The current project produces global weather forecast fields.
+Typhoon-center tracking, best-track matching, and track/intensity error calculations belong to a later evaluation stage.
 
-[论文](https://www.nature.com/articles/s41586-023-06185-3) · [官方实现](https://github.com/198808xc/Pangu-Weather)
+[Paper](https://www.nature.com/articles/s41586-023-06185-3) · [Official implementation](https://github.com/198808xc/Pangu-Weather)
