@@ -2,7 +2,7 @@
 import csv
 import hashlib
 import json
-import os
+import shutil
 from contextlib import ExitStack
 from datetime import timedelta
 from pathlib import Path
@@ -141,10 +141,14 @@ def products_complete(directory, forecast_id, leads):
         return False
 
 
-def link_products(case_dir, shared_dir):
+def copy_products(case_dir, shared_dir):
+    """Publish independent case files, replacing each target only after copying."""
     for name in ("surface.nc", "upper.nc"):
         target = case_dir / name
-        temp = case_dir / (name + ".link")
+        temp = case_dir / (name + ".partial")
         temp.unlink(missing_ok=True)
-        temp.symlink_to(os.path.relpath(shared_dir / name, case_dir))
-        temp.replace(target)
+        try:
+            shutil.copyfile(shared_dir / name, temp)
+            temp.replace(target)
+        finally:
+            temp.unlink(missing_ok=True)

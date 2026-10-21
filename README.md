@@ -114,8 +114,9 @@ z500 = upper.z.sel(level=500)  # z is geopotential in m²/s²
 Output includes `forecast_reference_time`, `lead_time`, `valid_time`, latitude, longitude, and physical pressure levels.
 `lead_time` is measured in hours, and the initial field is not mixed into the forecast output. NetCDF files use lossless compression and are written one time step at a time.
 
-**The NetCDF files under each case are relative symbolic links. When moving or delivering results, preserve the entire experiment directory, including `_forecasts/`.**
-To export only one case, use a copy method that follows symbolic links, and retain its `case.json` and provenance information.
+**The NetCDF files under each case are independent regular file copies, with no symbolic links. They can be copied or moved directly.**
+Identical forecasts are computed once in `_forecasts/` and copied into each case directory, which uses additional disk space. Resume reuses valid shared forecasts and refreshes the case copies.
+Retain `case.json` and the corresponding `_forecasts/<fingerprint>/manifest.json` for provenance; preserve the entire experiment directory for resume.
 
 ## Validation and legacy code
 

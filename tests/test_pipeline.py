@@ -49,7 +49,15 @@ def test_batch_reuse_time_mapping_and_resume(config, init_time, local_inputs):
     rows = read_summary(config)
     assert [r["status"] for r in rows] == ["complete", "reused", "complete"]
     root = config.output_dir / config.experiment
-    assert (root / "cases/a/surface.nc").resolve() == (root / "cases/b/surface.nc").resolve()
+    forecast_id = rows[0]["forecast_id"]
+    for name in ("surface.nc", "upper.nc"):
+        first, second = (root / "cases" / case_id / name for case_id in ("a", "b"))
+        shared = root / "_forecasts" / forecast_id / name
+        assert first.read_bytes() == second.read_bytes() == shared.read_bytes()
+        assert not first.samefile(second)
+        assert not first.samefile(shared)
+        assert not second.samefile(shared)
+    assert not any(p.is_symlink() for p in root.rglob("*"))
     with xr.open_dataset(root / "cases/a/surface.nc", decode_timedelta=True) as ds:
         np.testing.assert_array_equal(ds.lead_time.values / np.timedelta64(1, "h"), [6, 12, 18, 24, 30])
         assert ds.valid_time.values[-1] == np.datetime64("2026-01-02T00:00")
@@ -65,6 +73,7 @@ def test_batch_reuse_time_mapping_and_resume(config, init_time, local_inputs):
     assert run_batch(config, cases, resume=True, runtime_factory=FakeRuntime) == 0
     assert not FakeRuntime.calls
     assert all(r["status"] == "reused" for r in read_summary(config))
+    assert not any(p.is_symlink() for p in root.rglob("*"))
     assert not list(root.rglob("*.npy"))
     with pytest.raises(FileExistsError):
         run_batch(config, cases, runtime_factory=FakeRuntime)
@@ -93,11 +102,51 @@ def test_missing_time_does_not_abort_batch(config, init_time):
 def test_truncated_product_restarts(config, init_time):
     case = Case("a", "s", init_time, 6)
     run_batch(config, [case], runtime_factory=FakeRuntime)
-    path = config.output_dir / config.experiment / "cases/a/surface.nc"
-    path.resolve().write_bytes(b"truncated")
+    forecast_id = read_summary(config)[0]["forecast_id"]
+    path = config.output_dir / config.experiment / "_forecasts" / forecast_id / "surface.nc"
+    path.write_bytes(b"truncated")
     FakeRuntime.calls.clear()
     assert run_batch(config, [case], resume=True, runtime_factory=FakeRuntime) == 0
     assert FakeRuntime.calls == [6]
+
+
+def test_case_copy_damage_is_repaired_without_inference(config, init_time):
+    cases = [Case("a", "s", init_time, 6), Case("b", "s2", init_time, 6)]
+    assert run_batch(config, cases, runtime_factory=FakeRuntime) == 0
+    root = config.output_dir / config.experiment
+    forecast_id = read_summary(config)[0]["forecast_id"]
+    expected = {name: (root / "_forecasts" / forecast_id / name).read_bytes()
+                for name in ("surface.nc", "upper.nc")}
+    (root / "cases/a/surface.nc").write_bytes(b"truncated")
+    (root / "cases/a/upper.nc").unlink()
+    for name, content in expected.items():
+        assert (root / "_forecasts" / forecast_id / name).read_bytes() == content
+        assert (root / "cases/b" / name).read_bytes() == content
+    FakeRuntime.calls.clear()
+    assert run_batch(config, cases, resume=True, runtime_factory=FakeRuntime) == 0
+    assert not FakeRuntime.calls
+    for name, content in expected.items():
+        assert (root / "cases/a" / name).read_bytes() == content
+
+
+def test_resume_replaces_case_symlinks(config, init_time):
+    case = Case("a", "s", init_time, 6)
+    assert run_batch(config, [case], runtime_factory=FakeRuntime) == 0
+    root = config.output_dir / config.experiment
+    forecast_id = read_summary(config)[0]["forecast_id"]
+    for name in ("surface.nc", "upper.nc"):
+        path = root / "cases/a" / name
+        path.unlink()
+        path.symlink_to(root / "_forecasts" / forecast_id / name)
+    FakeRuntime.calls.clear()
+    assert run_batch(config, [case], resume=True, runtime_factory=FakeRuntime) == 0
+    assert not FakeRuntime.calls
+    for name in ("surface.nc", "upper.nc"):
+        path = root / "cases/a" / name
+        shared = root / "_forecasts" / forecast_id / name
+        assert not path.is_symlink()
+        assert not path.samefile(shared)
+        assert path.read_bytes() == shared.read_bytes()
 
 
 def test_changed_configuration_or_model_is_not_reused(config, init_time):

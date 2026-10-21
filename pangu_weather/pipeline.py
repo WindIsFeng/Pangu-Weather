@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .era5 import ERA5Source, source_paths
 from .output import (ForecastWriter, atomic_csv, atomic_json, digest, file_identity,
-                     link_products, products_complete)
+                     copy_products, products_complete)
 from .runtime import Runtime
 from .schedule import build_schedule, greedy_steps, predict
 
@@ -157,7 +157,7 @@ def run_batch(config, cases, resume=False, source_factory=ERA5Source, runtime_fa
                         atomic_json(shared_dir / "manifest.json", manifest)
                         owns_shared = False
                     completed.add(forecast_id)
-                    link_products(case_dir, shared_dir)
+                    copy_products(case_dir, shared_dir)
                     status = "reused" if reused else "complete"
                     atomic_json(record_path, {**case.record(), "status": status, "forecast_id": forecast_id,
                                               "source": source_identity, "updated_at": now(),

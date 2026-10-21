@@ -115,8 +115,10 @@ z500 = upper.z.sel(level=500)  # z 是位势，单位 m²/s²
 输出包含 `forecast_reference_time`、`lead_time`、`valid_time`、经纬度和真实气压层。
 `lead_time` 单位为小时，初始场不混入预报结果。NetCDF 使用无损压缩并逐时写入。
 
-**case 中的 NetCDF 是相对符号链接，迁移或交付时应保留整个实验目录，包括 `_forecasts/`。**
-若只导出某个 case，可使用支持跟随链接的复制方式，同时保留其 `case.json` 和来源说明。
+**case 中的 NetCDF 是独立的普通文件副本，不使用软链接，可以直接复制或移动。**
+相同预报仍只在 `_forecasts/` 中计算一次，再复制到各 case 目录，因此会增加磁盘占用。
+断点续跑复用有效的共享预报，并重新复制各 case 的文件。
+交付时保留 `case.json` 和对应的 `_forecasts/<fingerprint>/manifest.json` 作为来源说明；续跑时保留整个实验目录。
 
 ## 验证与旧代码
 
